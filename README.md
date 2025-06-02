@@ -7,8 +7,10 @@ A Flask web application for synchronizing data between Airtable and Grist databa
 ```
 project/
 │
-├── app.py              # Main Flask application
-├── requirements.txt    # Python dependencies
+├── app.py             # Main application
+├── airtable_handler.py
+├── grist_handler.py
+├── requirements.txt   # Python dependencies
 ├── .env.example       # Environment variables template
 ├── .gitignore         # Git ignore file
 ├── README.md          # This file
