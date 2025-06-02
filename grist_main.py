@@ -79,12 +79,6 @@ class GristApiClient:
             json={"records": grist_formatted_records}, 
         )
         response.raise_for_status()        
-        
-
-class TableColumnTypeEnum(Enum):
-    TEXT = 1
-    NUMERIC = 2
-    INTEGER = 3
     
 
 if __name__ == "__main__":
