@@ -161,6 +161,30 @@ export class AirtableService {
   }
 
   /**
+   * Get full table schema with fields for migration purposes
+   */
+  async getTableSchema(baseId: string, tableId: string): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/meta/bases/${baseId}/tables`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      const data = await this.handleResponse(response);
+      const table = data.tables.find((t: any) => t.id === tableId);
+      
+      if (!table) {
+        throw new Error(`Table with ID ${tableId} not found`);
+      }
+
+      return table; // Return the full table object with fields
+    } catch (error) {
+      console.error('Error fetching table schema:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Validate the API token by attempting to fetch bases
    */
   async validateToken(): Promise<boolean> {

@@ -6,6 +6,11 @@ import {
   type AirtableTable 
 } from "@/lib/airtable";
 import {
+  createGristService,
+  airtableToGristTable,
+  GristService,
+} from "@/lib/grist";
+import {
   MigrationHeader,
   MigrationProgress,
   ConnectionStep,
@@ -14,6 +19,10 @@ import {
   CompletionStep,
   MigrationFooter,
 } from "@/components/migration";
+
+// Configuration - in a real app, these would come from environment variables
+const GRIST_API_URL = "https://docs.getgrist.com";
+const GRIST_WORKSPACE_ID = 147018; // You may need to update this to your workspace ID
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -28,6 +37,7 @@ const Index = () => {
   const [airtableTables, setAirtableTables] = useState<AirtableTable[]>([]);
   const [isLoadingBases, setIsLoadingBases] = useState(false);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [createdDocumentId, setCreatedDocumentId] = useState<string>("");
   const { toast } = useToast();
 
   const handleTokenValidation = async () => {
@@ -122,18 +132,111 @@ const Index = () => {
     }
     
     setIsImporting(true);
-    // Simulate import process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    setIsImporting(false);
-    setCurrentStep(4);
-    toast({
-      title: "Migration Complete! 🎉",
-      description: `Successfully imported ${selectedTables.length} tables to Grist`,
-    });
+    
+    try {
+      // Initialize services
+      const airtableService = createAirtableService(airtableToken);
+      const gristService = createGristService(GRIST_API_URL, gristToken);
+      
+      // Create a new Grist document
+      const baseName = airtableBases.find(b => b.id === selectedBase)?.name || 'Unknown Base';
+      const documentName = `Imported from ${baseName} - ${new Date().toLocaleDateString()}`;
+      
+      toast({
+        title: "Creating Grist Document",
+        description: "Setting up your new Grist document...",
+      });
+      
+      const documentId = await gristService.createDocument(GRIST_WORKSPACE_ID, documentName);
+      setCreatedDocumentId(documentId);
+      
+      // Process each selected table
+      const gristTables = [];
+      const tableSchemas: Record<string, any> = {};
+      
+      toast({
+        title: "Fetching Table Schemas",
+        description: "Getting table structures from Airtable...",
+      });
+      
+      // Fetch schemas for all selected tables
+      for (const tableId of selectedTables) {
+        const tableSchema = await airtableService.getTableSchema(selectedBase, tableId);
+        tableSchemas[tableId] = tableSchema;
+        
+        // Convert Airtable table to Grist format
+        const gristTable = airtableToGristTable(tableSchema);
+        gristTables.push(gristTable);
+      }
+      
+      // Create tables in Grist
+      toast({
+        title: "Creating Tables in Grist",
+        description: "Setting up table structures...",
+      });
+      
+      const createdTableIds = await gristService.addTablesToDocument(documentId, gristTables);
+      
+      // Migrate data for each table
+      toast({
+        title: "Migrating Data",
+        description: "Transferring records from Airtable to Grist...",
+      });
+      
+      for (let i = 0; i < selectedTables.length; i++) {
+        const airtableTableId = selectedTables[i];
+        const gristTableId = createdTableIds[i];
+        const tableName = tableSchemas[airtableTableId].name;
+        
+        toast({
+          title: `Migrating Table: ${tableName}`,
+          description: `Processing table ${i + 1} of ${selectedTables.length}`,
+        });
+        
+        // Fetch all records from Airtable
+        const records = await airtableService.getAllRecords(selectedBase, airtableTableId);
+        
+        if (records.length > 0) {
+          // Transform records to Grist format
+          const gristRecords = records.map(record => record.fields || record);
+          
+          // Add records to Grist in batches
+          const batchSize = 100;
+          for (let j = 0; j < gristRecords.length; j += batchSize) {
+            const batch = gristRecords.slice(j, j + batchSize);
+            await gristService.addRecordsToTable(documentId, gristTableId, batch);
+          }
+        }
+      }
+      
+      setIsImporting(false);
+      setCurrentStep(4);
+      
+      toast({
+        title: "Migration Complete! 🎉",
+        description: `Successfully imported ${selectedTables.length} tables to Grist`,
+      });
+      
+    } catch (error: any) {
+      setIsImporting(false);
+      console.error('Migration failed:', error);
+      
+      toast({
+        title: "Migration Failed",
+        description: error.message || "An error occurred during migration. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleOpenGrist = () => {
-    window.open(gristUrl, '_blank');
+    if (createdDocumentId) {
+      // Open the specific document that was created
+      window.open(`${GRIST_API_URL}/doc/${createdDocumentId}`, '_blank');
+    } else {
+      // Fallback to the original URL
+      window.open(gristUrl, '_blank');
+    }
   };
 
   const handleRestart = () => {
@@ -147,6 +250,7 @@ const Index = () => {
     setAirtableTables([]);
     setIsLoadingBases(false);
     setIsLoadingTables(false);
+    setCreatedDocumentId("");
   };
 
   return (
