@@ -18,6 +18,8 @@ def push_to_grist(config):
     doc_id = config.get('grist', {}).get('docId')
     table_id = config.get('grist', {}).get('tableId')
     server_url = config.get('grist', {}).get('serverUrl')
+
+    print(api_key, doc_id, table_id, server_url)
     
     # For now, return stub response
     return {

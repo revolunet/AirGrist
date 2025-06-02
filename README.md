@@ -52,7 +52,7 @@ pip install -r requirements.txt
 ### 4. Set up environment variables
 
 ```bash
-cp .env.example .env
+cp env.example .env
 # Edit .env with your configuration
 ```
 
@@ -72,7 +72,7 @@ mkdir -p templates
 python app.py
 ```
 
-The app will be available at `http://localhost:5000`
+The app will be available at `http://localhost:4040`
 
 ### Production Mode (using Gunicorn)
 

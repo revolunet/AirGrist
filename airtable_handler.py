@@ -17,7 +17,7 @@ def pull_from_airtable(config):
     api_key = config.get('airtable', {}).get('apiKey')
     base_id = config.get('airtable', {}).get('baseId')
     table_name = config.get('airtable', {}).get('tableName')
-    
+    print(api_key, base_id, table_name)
     # For now, return stub data
     return {
         'status': 'success',
