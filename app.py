@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, jsonify
 import os
 from dotenv import load_dotenv
+from airtable_handler import pull_from_airtable
+from grist_handler import push_to_grist
 
 # Load environment variables
 load_dotenv()
@@ -13,23 +15,18 @@ def index():
     return render_template('index.html')
 
 @app.route('/api/pull-airtable', methods=['POST'])
-def pull_from_airtable():
-    """Stub endpoint for pulling data from Airtable"""
-    # TODO: Implement Airtable API integration
-    return jsonify({
-        'status': 'success',
-        'message': 'Airtable pull functionality not yet implemented',
-        'data': []
-    })
+def api_pull_airtable():
+    """Endpoint for pulling data from Airtable"""
+    config = request.get_json()
+    data = pull_from_airtable(config)
+    return jsonify(data)
 
 @app.route('/api/push-grist', methods=['POST'])
-def push_to_grist():
-    """Stub endpoint for pushing data to Grist"""
-    # TODO: Implement Grist API integration
-    return jsonify({
-        'status': 'success',
-        'message': 'Grist push functionality not yet implemented'
-    })
+def api_push_grist():
+    """Endpoint for pushing data to Grist"""
+    config = request.get_json()
+    data = push_to_grist(config)
+    return jsonify(data)
 
 @app.route('/api/save-config', methods=['POST'])
 def save_config():
