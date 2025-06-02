@@ -33,22 +33,43 @@ const Index = () => {
   const [gristUrl, setGristUrl] = useState("");
   const [isValidatingToken, setIsValidatingToken] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [airtableBases, setAirtableBases] = useState<AirtableBase[]>([]);
+  const [isLoadingBases, setIsLoadingBases] = useState(false);
   const { toast } = useToast();
 
-  // Mock data for demo purposes
-  const mockBases: AirtableBase[] = [
-    { id: "appXYZ123", name: "Marketing Campaign Tracker", permissionLevel: "create" },
-    { id: "appABC456", name: "Customer Database", permissionLevel: "edit" },
-    { id: "appDEF789", name: "Project Management", permissionLevel: "create" },
-    { id: "appGHI012", name: "Inventory System", permissionLevel: "read" }
-  ];
-
+  // Mock data for demo purposes (keeping for tables since we'll need actual base selection first)
   const mockTables: AirtableTable[] = [
     { id: "tblCampaigns", name: "Campaigns", description: "Marketing campaign data", primaryFieldId: "fldName", recordCount: 156 },
     { id: "tblLeads", name: "Leads", description: "Lead tracking and management", primaryFieldId: "fldEmail", recordCount: 2847 },
     { id: "tblBudgets", name: "Budgets", description: "Budget allocation and tracking", primaryFieldId: "fldCampaign", recordCount: 45 },
     { id: "tblAnalytics", name: "Analytics", description: "Performance metrics", primaryFieldId: "fldMetric", recordCount: 892 }
   ];
+
+  const fetchAirtableBases = async (token: string): Promise<AirtableBase[]> => {
+    try {
+      const response = await fetch('https://api.airtable.com/v0/meta/bases', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Airtable API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.bases.map((base: any) => ({
+        id: base.id,
+        name: base.name,
+        permissionLevel: base.permissionLevel
+      }));
+    } catch (error) {
+      console.error('Error fetching Airtable bases:', error);
+      throw error;
+    }
+  };
 
   const handleTokenValidation = async () => {
     if (!airtableToken.trim()) {
@@ -70,14 +91,31 @@ const Index = () => {
     }
 
     setIsValidatingToken(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsValidatingToken(false);
-    setCurrentStep(2);
-    toast({
-      title: "Tokens Validated",
-      description: "Successfully connected to both Airtable and Grist",
-    });
+    setIsLoadingBases(true);
+    
+    try {
+      // Fetch actual Airtable bases using the provided token
+      const bases = await fetchAirtableBases(airtableToken);
+      setAirtableBases(bases);
+      
+      setIsValidatingToken(false);
+      setIsLoadingBases(false);
+      setCurrentStep(2);
+      
+      toast({
+        title: "Connection Successful",
+        description: `Found ${bases.length} accessible base(s) in your Airtable account`,
+      });
+    } catch (error) {
+      setIsValidatingToken(false);
+      setIsLoadingBases(false);
+      
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Airtable. Please check your token and try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleBaseSelection = (baseId: string) => {
@@ -85,7 +123,7 @@ const Index = () => {
     setCurrentStep(3);
     toast({
       title: "Base Selected",
-      description: `Loading tables from ${mockBases.find(b => b.id === baseId)?.name}...`,
+      description: `Loading tables from ${airtableBases.find(b => b.id === baseId)?.name}...`,
     });
   };
 
@@ -132,6 +170,8 @@ const Index = () => {
     setSelectedTables([]);
     setGristToken("");
     setGristUrl("");
+    setAirtableBases([]);
+    setIsLoadingBases(false);
   };
 
   return (
@@ -275,30 +315,44 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4">
-                  {mockBases.map((base) => (
-                    <Card 
-                      key={base.id} 
-                      className="cursor-pointer hover:bg-blue-50 border-2 hover:border-blue-200 transition-all"
-                      onClick={() => handleBaseSelection(base.id)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">{base.name}</h3>
-                            <p className="text-sm text-gray-500">Base ID: {base.id}</p>
+                {isLoadingBases ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading your Airtable bases...</p>
+                  </div>
+                ) : airtableBases.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600 mb-4">No accessible bases found in your Airtable account.</p>
+                    <Button onClick={() => setCurrentStep(1)} variant="outline">
+                      Go Back and Check Token
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {airtableBases.map((base) => (
+                      <Card 
+                        key={base.id} 
+                        className="cursor-pointer hover:bg-blue-50 border-2 hover:border-blue-200 transition-all"
+                        onClick={() => handleBaseSelection(base.id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold text-lg">{base.name}</h3>
+                              <p className="text-sm text-gray-500">Base ID: {base.id}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={base.permissionLevel === 'create' ? 'default' : 'secondary'}>
+                                {base.permissionLevel}
+                              </Badge>
+                              <ArrowRight className="h-5 w-5 text-gray-400" />
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={base.permissionLevel === 'create' ? 'default' : 'secondary'}>
-                              {base.permissionLevel}
-                            </Badge>
-                            <ArrowRight className="h-5 w-5 text-gray-400" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
