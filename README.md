@@ -1,4 +1,4 @@
-# AirGrist - Airtbale -> Grist Sync Tool
+# AirGrist - AirTable -> Grist Sync Tool
 
 A Flask web application for synchronizing data between Airtable and Grist databases.
 
