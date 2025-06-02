@@ -116,7 +116,7 @@ export const TableSelectionStep = ({
               ) : (
                 <>
                   <Rocket className="mr-3 h-6 w-6" />
-                  Free from Airtable! 🚀
+                  Continue to Grist Setup
                 </>
               )}
             </Button>

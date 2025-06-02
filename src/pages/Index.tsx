@@ -8,7 +8,10 @@ import {
 import {
   createGristService,
   airtableToGristTable,
+  validateGristCredentials,
   GristService,
+  type GristOrganization,
+  type GristWorkspace,
 } from "@/lib/grist";
 import {
   MigrationHeader,
@@ -16,6 +19,7 @@ import {
   ConnectionStep,
   BaseSelectionStep,
   TableSelectionStep,
+  OrganizationSelectionStep,
   CompletionStep,
   MigrationFooter,
 } from "@/components/migration";
@@ -30,7 +34,7 @@ const Index = () => {
   const [selectedBase, setSelectedBase] = useState("");
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [gristToken, setGristToken] = useState("");
-  const [gristUrl, setGristUrl] = useState("");
+  const [gristUrl, setGristUrl] = useState("https://docs.getgrist.com");
   const [isValidatingToken, setIsValidatingToken] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [airtableBases, setAirtableBases] = useState<AirtableBase[]>([]);
@@ -38,6 +42,12 @@ const Index = () => {
   const [isLoadingBases, setIsLoadingBases] = useState(false);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [createdDocumentId, setCreatedDocumentId] = useState<string>("");
+  const [gristOrgs, setGristOrgs] = useState<GristOrganization[]>([]);
+  const [gristWorkspaces, setGristWorkspaces] = useState<GristWorkspace[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<number | null>(null);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<number | null>(null);
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
   const { toast } = useToast();
 
   const handleTokenValidation = async () => {
@@ -63,25 +73,49 @@ const Index = () => {
     setIsLoadingBases(true);
     
     try {
+      // Show validation progress
+      toast({
+        title: "Validating Credentials",
+        description: "Checking Airtable and Grist API access...",
+      });
+
+      // Validate Grist credentials first
+      const isGristValid = await validateGristCredentials(GRIST_API_URL, gristToken);
+      
+      if (!isGristValid) {
+        setIsValidatingToken(false);
+        setIsLoadingBases(false);
+        
+        toast({
+          title: "Grist Connection Failed",
+          description: "Failed to connect to Grist. Please check your token and try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // If Grist is valid, validate Airtable and fetch bases
       const airtableService = createAirtableService(airtableToken);
       const bases = await airtableService.getBases();
+
+      // Both validations successful
       setAirtableBases(bases);
-      
       setIsValidatingToken(false);
       setIsLoadingBases(false);
       setCurrentStep(2);
       
       toast({
         title: "Connection Successful",
-        description: `Found ${bases.length} accessible base(s) in your Airtable account`,
+        description: `Connected to both services! Found ${bases.length} accessible base(s).`,
       });
+
     } catch (error) {
       setIsValidatingToken(false);
       setIsLoadingBases(false);
       
       toast({
         title: "Connection Failed",
-        description: "Failed to connect to Airtable. Please check your token and try again.",
+        description: "Failed to connect to one or both services. Please check your credentials and try again.",
         variant: "destructive"
       });
     }
@@ -121,11 +155,83 @@ const Index = () => {
     );
   };
 
+  const handleContinueToOrgSelection = async () => {
+    if (selectedTables.length === 0) {
+      toast({
+        title: "No Tables Selected",
+        description: "Please select at least one table to import",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoadingOrgs(true);
+    setCurrentStep(4);
+
+    try {
+      const gristService = createGristService(GRIST_API_URL, gristToken);
+      const orgs = await gristService.getOrgs();
+      setGristOrgs(orgs);
+      setIsLoadingOrgs(false);
+
+      toast({
+        title: "Organizations Loaded",
+        description: `Found ${orgs.length} organization(s) in your Grist account`,
+      });
+    } catch (error) {
+      setIsLoadingOrgs(false);
+      toast({
+        title: "Failed to Load Organizations",
+        description: "Failed to fetch organizations from Grist. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleOrgSelection = async (orgId: number) => {
+    setSelectedOrg(orgId);
+    setSelectedWorkspace(null);
+    setIsLoadingWorkspaces(true);
+
+    try {
+      const gristService = createGristService(GRIST_API_URL, gristToken);
+      const workspaces = await gristService.getWorkspaces(orgId);
+      setGristWorkspaces(workspaces);
+      setIsLoadingWorkspaces(false);
+
+      const orgName = gristOrgs.find(org => org.id === orgId)?.name;
+      toast({
+        title: "Workspaces Loaded",
+        description: `Found ${workspaces.length} workspace(s) in ${orgName}`,
+      });
+    } catch (error) {
+      setIsLoadingWorkspaces(false);
+      toast({
+        title: "Failed to Load Workspaces",
+        description: "Failed to fetch workspaces from the selected organization. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleWorkspaceSelection = (workspaceId: number) => {
+    setSelectedWorkspace(workspaceId);
+  };
+
   const handleStartMigration = async () => {
     if (selectedTables.length === 0) {
       toast({
         title: "No Tables Selected",
         description: "Please select at least one table to import",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!selectedWorkspace) {
+      toast({
+        title: "No Workspace Selected",
+        description: "Please select a workspace for the migration",
         variant: "destructive"
       });
       return;
@@ -147,7 +253,7 @@ const Index = () => {
         description: "Setting up your new Grist document...",
       });
       
-      const documentId = await gristService.createDocument(GRIST_WORKSPACE_ID, documentName);
+      const documentId = await gristService.createDocument(selectedWorkspace, documentName);
       setCreatedDocumentId(documentId);
       
       // Process each selected table
@@ -210,7 +316,7 @@ const Index = () => {
       }
       
       setIsImporting(false);
-      setCurrentStep(4);
+      setCurrentStep(5);
       
       toast({
         title: "Migration Complete! 🎉",
@@ -245,11 +351,17 @@ const Index = () => {
     setSelectedBase("");
     setSelectedTables([]);
     setGristToken("");
-    setGristUrl("");
+    setGristUrl("https://docs.getgrist.com");
     setAirtableBases([]);
     setAirtableTables([]);
     setIsLoadingBases(false);
     setIsLoadingTables(false);
+    setGristOrgs([]);
+    setGristWorkspaces([]);
+    setSelectedOrg(null);
+    setSelectedWorkspace(null);
+    setIsLoadingOrgs(false);
+    setIsLoadingWorkspaces(false);
     setCreatedDocumentId("");
   };
 
@@ -260,7 +372,7 @@ const Index = () => {
         
         <MigrationProgress 
           currentStep={currentStep} 
-          totalSteps={4} 
+          totalSteps={5} 
         />
 
         <div className="max-w-4xl mx-auto">
@@ -292,15 +404,30 @@ const Index = () => {
               airtableTables={airtableTables}
               selectedTables={selectedTables}
               isLoadingTables={isLoadingTables}
-              isImporting={isImporting}
+              isImporting={false}
               gristUrl={gristUrl}
               onTableToggle={handleTableToggle}
-              onStartMigration={handleStartMigration}
+              onStartMigration={handleContinueToOrgSelection}
               onGoBack={() => setCurrentStep(2)}
             />
           )}
 
           {currentStep === 4 && (
+            <OrganizationSelectionStep
+              gristOrgs={gristOrgs}
+              gristWorkspaces={gristWorkspaces}
+              selectedOrg={selectedOrg}
+              selectedWorkspace={selectedWorkspace}
+              isLoadingOrgs={isLoadingOrgs}
+              isLoadingWorkspaces={isLoadingWorkspaces}
+              onOrgSelect={handleOrgSelection}
+              onWorkspaceSelect={handleWorkspaceSelection}
+              onGoBack={() => setCurrentStep(3)}
+              onContinue={handleStartMigration}
+            />
+          )}
+
+          {currentStep === 5 && (
             <CompletionStep
               selectedTables={selectedTables}
               airtableTables={airtableTables}

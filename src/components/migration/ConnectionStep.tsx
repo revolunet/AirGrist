@@ -85,15 +85,18 @@ export const ConnectionStep = ({
             </h3>
             <div className="space-y-2">
               <Label htmlFor="grist-url" className="text-sm font-medium">
-                Grist Document URL
+                Grist Base URL
               </Label>
               <Input
                 id="grist-url"
-                placeholder="https://docs.getgrist.com/your-doc-id"
+                placeholder="https://docs.getgrist.com"
                 value={gristUrl}
                 onChange={(e) => setGristUrl(e.target.value)}
                 className="text-lg p-3"
               />
+              <p className="text-sm text-gray-600">
+                The base URL of your Grist instance (usually docs.getgrist.com)
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="grist-token" className="text-sm font-medium">

@@ -34,6 +34,18 @@ export interface GristRecord {
   fields: Record<string, any>;
 }
 
+export interface GristOrganization {
+  id: number;
+  name: string;
+  domain?: string;
+}
+
+export interface GristWorkspace {
+  id: number;
+  name: string;
+  docs?: any[];
+}
+
 class GristApiError extends Error {
   constructor(
     public status: number,
@@ -64,7 +76,7 @@ export class GristService {
     return {
       'Authorization': `Bearer ${this.token}`,
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      'X-Requested-With': 'idunno',
     };
   }
 
@@ -81,7 +93,8 @@ export class GristService {
    */
   async createDocument(workspaceId: number, documentName: string): Promise<string> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/workspaces/${workspaceId}/docs`, {
+      const url = `${this.baseUrl}/api/workspaces/${workspaceId}/docs`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ name: documentName }),
@@ -100,7 +113,8 @@ export class GristService {
    */
   async addTablesToDocument(documentId: string, tables: GristTable[]): Promise<string[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/docs/${documentId}/tables`, {
+      const url = `${this.baseUrl}/api/docs/${documentId}/tables`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ tables }),
@@ -123,7 +137,8 @@ export class GristService {
         fields: record
       }));
 
-      const response = await fetch(`${this.baseUrl}/api/docs/${documentId}/tables/${tableId}/records`, {
+      const url = `${this.baseUrl}/api/docs/${documentId}/tables/${tableId}/records`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ records: gristFormattedRecords }),
@@ -145,6 +160,82 @@ export class GristService {
       throw new Error('Invalid Grist document URL. Expected format: https://docs.getgrist.com/doc/DOC_ID');
     }
     return match[1];
+  }
+
+  /**
+   * Validate the API token and URL by attempting to fetch organizations
+   */
+  async validateToken(): Promise<boolean> {
+    try {
+      const url = `${this.baseUrl}/api/orgs`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      await this.handleResponse(response);
+      return true;
+    } catch (error) {
+      console.error('Error validating Grist token:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get organizations to verify API access
+   */
+  async getOrganizations(): Promise<any[]> {
+    try {
+      const url = `${this.baseUrl}/api/orgs`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      const data = await this.handleResponse(response);
+      return data.orgs || [];
+    } catch (error) {
+      console.error('Error fetching Grist organizations:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get organizations for selection
+   */
+  async getOrgs(): Promise<GristOrganization[]> {
+    try {
+      const url = `${this.baseUrl}/api/orgs`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      const data = await this.handleResponse(response);
+      return data.orgs || [];
+    } catch (error) {
+      console.error('Error fetching Grist organizations:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get workspaces for a specific organization
+   */
+  async getWorkspaces(orgId: number): Promise<GristWorkspace[]> {
+    try {
+      const url = `${this.baseUrl}/api/orgs/${orgId}/workspaces`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      const data = await this.handleResponse(response);
+      return data.workspaces || [];
+    } catch (error) {
+      console.error('Error fetching Grist workspaces:', error);
+      throw error;
+    }
   }
 }
 
@@ -210,4 +301,16 @@ export function airtableToGristTable(airtableTable: any): GristTable {
  */
 export const createGristService = (apiUrl: string, token: string): GristService => {
   return new GristService(apiUrl, token);
+};
+
+/**
+ * Validate Grist API token and URL
+ */
+export const validateGristCredentials = async (apiUrl: string, token: string): Promise<boolean> => {
+  try {
+    const service = new GristService(apiUrl, token);
+    return await service.validateToken();
+  } catch {
+    return false;
+  }
 }; 
