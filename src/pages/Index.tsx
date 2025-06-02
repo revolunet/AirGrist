@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,8 +53,17 @@ const Index = () => {
   const handleTokenValidation = async () => {
     if (!airtableToken.trim()) {
       toast({
-        title: "Token Required",
+        title: "Airtable Token Required",
         description: "Please enter your Airtable API token",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!gristToken.trim() || !gristUrl.trim()) {
+      toast({
+        title: "Grist Details Required",
+        description: "Please provide both Grist token and URL",
         variant: "destructive"
       });
       return;
@@ -67,8 +75,8 @@ const Index = () => {
     setIsValidatingToken(false);
     setCurrentStep(2);
     toast({
-      title: "Token Validated",
-      description: "Successfully connected to your Airtable account",
+      title: "Tokens Validated",
+      description: "Successfully connected to both Airtable and Grist",
     });
   };
 
@@ -89,7 +97,7 @@ const Index = () => {
     );
   };
 
-  const handleProceedToGrist = () => {
+  const handleProceedToMigration = () => {
     if (selectedTables.length === 0) {
       toast({
         title: "No Tables Selected",
@@ -102,20 +110,11 @@ const Index = () => {
   };
 
   const handleFreeFromAirtable = async () => {
-    if (!gristToken.trim() || !gristUrl.trim()) {
-      toast({
-        title: "Grist Details Required",
-        description: "Please provide both Grist token and URL",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsImporting(true);
     // Simulate import process
     await new Promise(resolve => setTimeout(resolve, 3000));
     setIsImporting(false);
-    setCurrentStep(5);
+    setCurrentStep(4);
     toast({
       title: "Migration Complete! 🎉",
       description: `Successfully imported ${selectedTables.length} tables to Grist`,
@@ -123,7 +122,7 @@ const Index = () => {
   };
 
   const getStepProgress = () => {
-    return Math.min((currentStep / 5) * 100, 100);
+    return Math.min((currentStep / 4) * 100, 100);
   };
 
   const resetFlow = () => {
@@ -161,7 +160,7 @@ const Index = () => {
         <div className="max-w-4xl mx-auto mb-8">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-medium text-gray-700">Progress</span>
-            <span className="text-sm text-gray-500">{currentStep}/5 steps</span>
+            <span className="text-sm text-gray-500">{currentStep}/4 steps</span>
           </div>
           <Progress value={getStepProgress()} className="h-2" />
         </div>
@@ -175,39 +174,89 @@ const Index = () => {
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Database className="h-6 w-6 text-blue-600" />
                   </div>
-                  Connect to Airtable
+                  Connect to Airtable & Grist
                 </CardTitle>
                 <CardDescription className="text-lg">
-                  Enter your Airtable API token to access your bases and tables
+                  Enter your API tokens for both Airtable and Grist to get started
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="airtable-token" className="text-sm font-medium">
-                    Airtable API Token
-                  </Label>
-                  <Input
-                    id="airtable-token"
-                    type="password"
-                    placeholder="pat****************************"
-                    value={airtableToken}
-                    onChange={(e) => setAirtableToken(e.target.value)}
-                    className="text-lg p-3"
-                  />
-                  <p className="text-sm text-gray-500">
-                    Find your token at{" "}
-                    <a href="https://airtable.com/create/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
-                      airtable.com/create/tokens
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </p>
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Airtable Section */}
+                  <div className="space-y-4 p-4 border rounded-lg bg-blue-50">
+                    <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
+                      <div className="p-1 bg-blue-600 rounded">
+                        <Database className="h-4 w-4 text-white" />
+                      </div>
+                      Airtable Source
+                    </h3>
+                    <div className="space-y-2">
+                      <Label htmlFor="airtable-token" className="text-sm font-medium">
+                        Airtable API Token
+                      </Label>
+                      <Input
+                        id="airtable-token"
+                        type="password"
+                        placeholder="pat****************************"
+                        value={airtableToken}
+                        onChange={(e) => setAirtableToken(e.target.value)}
+                        className="text-lg p-3"
+                      />
+                      <p className="text-sm text-gray-600">
+                        Find your token at{" "}
+                        <a href="https://airtable.com/create/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                          airtable.com/create/tokens
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Grist Section */}
+                  <div className="space-y-4 p-4 border rounded-lg bg-green-50">
+                    <h3 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+                      <div className="p-1 bg-green-600 rounded">
+                        <Database className="h-4 w-4 text-white" />
+                      </div>
+                      Grist Destination
+                    </h3>
+                    <div className="space-y-2">
+                      <Label htmlFor="grist-url" className="text-sm font-medium">
+                        Grist Document URL
+                      </Label>
+                      <Input
+                        id="grist-url"
+                        placeholder="https://docs.getgrist.com/your-doc-id"
+                        value={gristUrl}
+                        onChange={(e) => setGristUrl(e.target.value)}
+                        className="text-lg p-3"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="grist-token" className="text-sm font-medium">
+                        Grist API Token
+                      </Label>
+                      <Input
+                        id="grist-token"
+                        type="password"
+                        placeholder="Your Grist API token"
+                        value={gristToken}
+                        onChange={(e) => setGristToken(e.target.value)}
+                        className="text-lg p-3"
+                      />
+                      <p className="text-sm text-gray-600">
+                        Generate a token in your Grist account settings
+                      </p>
+                    </div>
+                  </div>
                 </div>
+
                 <Button 
                   onClick={handleTokenValidation} 
                   disabled={isValidatingToken}
-                  className="w-full text-lg py-6 bg-blue-600 hover:bg-blue-700"
+                  className="w-full text-lg py-6 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
                 >
-                  {isValidatingToken ? "Validating..." : "Connect to Airtable"}
+                  {isValidatingToken ? "Validating Connections..." : "Connect to Both Services"}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </CardContent>
@@ -313,81 +362,16 @@ const Index = () => {
                   </div>
                 )}
 
-                <Button 
-                  onClick={handleProceedToGrist}
-                  className="w-full text-lg py-6 bg-blue-600 hover:bg-blue-700"
-                  disabled={selectedTables.length === 0}
-                >
-                  Proceed to Grist Setup
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === 4 && (
-            <Card className="border-2 border-green-100 shadow-lg">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl flex items-center justify-center gap-2">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Database className="h-6 w-6 text-green-600" />
-                  </div>
-                  Connect to Grist
-                </CardTitle>
-                <CardDescription className="text-lg">
-                  Provide your Grist credentials to complete the migration
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                  <h4 className="font-semibold text-blue-900 mb-2">Ready to Import:</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTables.map(tableId => {
-                      const table = mockTables.find(t => t.id === tableId);
-                      return (
-                        <Badge key={tableId} variant="secondary">
-                          {table?.name} ({table?.recordCount.toLocaleString()} records)
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="grist-url" className="text-sm font-medium">
-                      Grist Document URL
-                    </Label>
-                    <Input
-                      id="grist-url"
-                      placeholder="https://docs.getgrist.com/your-doc-id"
-                      value={gristUrl}
-                      onChange={(e) => setGristUrl(e.target.value)}
-                      className="text-lg p-3"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="grist-token" className="text-sm font-medium">
-                      Grist API Token
-                    </Label>
-                    <Input
-                      id="grist-token"
-                      type="password"
-                      placeholder="Your Grist API token"
-                      value={gristToken}
-                      onChange={(e) => setGristToken(e.target.value)}
-                      className="text-lg p-3"
-                    />
-                    <p className="text-sm text-gray-500">
-                      Generate a token in your Grist account settings
-                    </p>
-                  </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-green-900 mb-2">Migration Destination:</h4>
+                  <p className="text-sm text-green-800">
+                    Tables will be migrated to: <span className="font-mono bg-white px-2 py-1 rounded">{gristUrl}</span>
+                  </p>
                 </div>
 
                 <Button 
                   onClick={handleFreeFromAirtable}
-                  disabled={isImporting}
+                  disabled={isImporting || selectedTables.length === 0}
                   className="w-full text-xl py-8 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transition-all"
                 >
                   {isImporting ? (
@@ -403,7 +387,7 @@ const Index = () => {
             </Card>
           )}
 
-          {currentStep === 5 && (
+          {currentStep === 4 && (
             <Card className="border-2 border-green-100 shadow-lg">
               <CardHeader className="text-center">
                 <CardTitle className="text-3xl flex items-center justify-center gap-2 text-green-700">
