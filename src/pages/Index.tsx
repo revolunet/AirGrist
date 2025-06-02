@@ -9,20 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowRight, Database, CheckCircle, ExternalLink, Rocket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface AirtableBase {
-  id: string;
-  name: string;
-  permissionLevel: string;
-}
-
-interface AirtableTable {
-  id: string;
-  name: string;
-  description?: string;
-  primaryFieldId: string;
-  recordCount: number;
-}
+import { 
+  AirtableService, 
+  createAirtableService, 
+  type AirtableBase, 
+  type AirtableTable 
+} from "@/lib/airtable";
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -34,42 +26,10 @@ const Index = () => {
   const [isValidatingToken, setIsValidatingToken] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [airtableBases, setAirtableBases] = useState<AirtableBase[]>([]);
+  const [airtableTables, setAirtableTables] = useState<AirtableTable[]>([]);
   const [isLoadingBases, setIsLoadingBases] = useState(false);
+  const [isLoadingTables, setIsLoadingTables] = useState(false);
   const { toast } = useToast();
-
-  // Mock data for demo purposes (keeping for tables since we'll need actual base selection first)
-  const mockTables: AirtableTable[] = [
-    { id: "tblCampaigns", name: "Campaigns", description: "Marketing campaign data", primaryFieldId: "fldName", recordCount: 156 },
-    { id: "tblLeads", name: "Leads", description: "Lead tracking and management", primaryFieldId: "fldEmail", recordCount: 2847 },
-    { id: "tblBudgets", name: "Budgets", description: "Budget allocation and tracking", primaryFieldId: "fldCampaign", recordCount: 45 },
-    { id: "tblAnalytics", name: "Analytics", description: "Performance metrics", primaryFieldId: "fldMetric", recordCount: 892 }
-  ];
-
-  const fetchAirtableBases = async (token: string): Promise<AirtableBase[]> => {
-    try {
-      const response = await fetch('https://api.airtable.com/v0/meta/bases', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Airtable API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.bases.map((base: any) => ({
-        id: base.id,
-        name: base.name,
-        permissionLevel: base.permissionLevel
-      }));
-    } catch (error) {
-      console.error('Error fetching Airtable bases:', error);
-      throw error;
-    }
-  };
 
   const handleTokenValidation = async () => {
     if (!airtableToken.trim()) {
@@ -94,8 +54,9 @@ const Index = () => {
     setIsLoadingBases(true);
     
     try {
-      // Fetch actual Airtable bases using the provided token
-      const bases = await fetchAirtableBases(airtableToken);
+      // Create Airtable service and fetch bases
+      const airtableService = createAirtableService(airtableToken);
+      const bases = await airtableService.getBases();
       setAirtableBases(bases);
       
       setIsValidatingToken(false);
@@ -118,13 +79,30 @@ const Index = () => {
     }
   };
 
-  const handleBaseSelection = (baseId: string) => {
+  const handleBaseSelection = async (baseId: string) => {
     setSelectedBase(baseId);
-    setCurrentStep(3);
-    toast({
-      title: "Base Selected",
-      description: `Loading tables from ${airtableBases.find(b => b.id === baseId)?.name}...`,
-    });
+    setIsLoadingTables(true);
+    
+    try {
+      const airtableService = createAirtableService(airtableToken);
+      const tables = await airtableService.getTables(baseId);
+      setAirtableTables(tables);
+      setIsLoadingTables(false);
+      setCurrentStep(3);
+      
+      toast({
+        title: "Base Selected",
+        description: `Loaded ${tables.length} table(s) from ${airtableBases.find(b => b.id === baseId)?.name}`,
+      });
+    } catch (error) {
+      setIsLoadingTables(false);
+      
+      toast({
+        title: "Failed to Load Tables",
+        description: "Failed to fetch tables from the selected base. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleTableToggle = (tableId: string) => {
@@ -171,7 +149,9 @@ const Index = () => {
     setGristToken("");
     setGristUrl("");
     setAirtableBases([]);
+    setAirtableTables([]);
     setIsLoadingBases(false);
+    setIsLoadingTables(false);
   };
 
   return (
@@ -315,10 +295,12 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoadingBases ? (
+                {isLoadingBases || isLoadingTables ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading your Airtable bases...</p>
+                    <p className="text-gray-600">
+                      {isLoadingBases ? "Loading your Airtable bases..." : "Loading tables from selected base..."}
+                    </p>
                   </div>
                 ) : airtableBases.length === 0 ? (
                   <div className="text-center py-8">
@@ -369,74 +351,90 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4">
-                  {mockTables.map((table) => (
-                    <Card 
-                      key={table.id} 
-                      className={`cursor-pointer border-2 transition-all ${
-                        selectedTables.includes(table.id) 
-                          ? 'border-blue-500 bg-blue-50' 
-                          : 'border-gray-200 hover:border-blue-300'
-                      }`}
-                      onClick={() => handleTableToggle(table.id)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center space-x-3">
-                          <Checkbox 
-                            checked={selectedTables.includes(table.id)}
-                            onChange={() => handleTableToggle(table.id)}
-                          />
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg">{table.name}</h3>
-                            <p className="text-sm text-gray-600 mb-1">{table.description}</p>
-                            <p className="text-xs text-gray-500">{table.recordCount.toLocaleString()} records</p>
-                          </div>
-                          <Badge variant="outline">{table.recordCount.toLocaleString()}</Badge>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                
-                {selectedTables.length > 0 && (
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-blue-800 mb-2">
-                      <strong>{selectedTables.length}</strong> table(s) selected for import
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedTables.map(tableId => {
-                        const table = mockTables.find(t => t.id === tableId);
-                        return (
-                          <Badge key={tableId} variant="secondary">
-                            {table?.name}
-                          </Badge>
-                        );
-                      })}
-                    </div>
+                {isLoadingTables ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading tables from selected base...</p>
                   </div>
+                ) : airtableTables.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600 mb-4">No tables found in the selected base.</p>
+                    <Button onClick={() => setCurrentStep(2)} variant="outline">
+                      Go Back and Select Different Base
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-4">
+                      {airtableTables.map((table) => (
+                        <Card 
+                          key={table.id} 
+                          className={`cursor-pointer border-2 transition-all ${
+                            selectedTables.includes(table.id) 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-200 hover:border-blue-300'
+                          }`}
+                          onClick={() => handleTableToggle(table.id)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center space-x-3">
+                              <Checkbox 
+                                checked={selectedTables.includes(table.id)}
+                                onChange={() => handleTableToggle(table.id)}
+                              />
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-lg">{table.name}</h3>
+                                {table.description && <p className="text-sm text-gray-600 mb-1">{table.description}</p>}
+                                <p className="text-xs text-gray-500">Table ID: {table.id}</p>
+                              </div>
+                              <Badge variant="outline">Table</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                    
+                    {selectedTables.length > 0 && (
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <p className="text-sm text-blue-800 mb-2">
+                          <strong>{selectedTables.length}</strong> table(s) selected for import
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTables.map(tableId => {
+                            const table = airtableTables.find(t => t.id === tableId);
+                            return (
+                              <Badge key={tableId} variant="secondary">
+                                {table?.name}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h4 className="font-semibold text-green-900 mb-2">Migration Destination:</h4>
+                      <p className="text-sm text-green-800">
+                        Tables will be migrated to: <span className="font-mono bg-white px-2 py-1 rounded">{gristUrl}</span>
+                      </p>
+                    </div>
+
+                    <Button 
+                      onClick={handleFreeFromAirtable}
+                      disabled={isImporting || selectedTables.length === 0}
+                      className="w-full text-xl py-8 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transition-all"
+                    >
+                      {isImporting ? (
+                        "Migrating Data..."
+                      ) : (
+                        <>
+                          <Rocket className="mr-3 h-6 w-6" />
+                          Free from Airtable! 🚀
+                        </>
+                      )}
+                    </Button>
+                  </>
                 )}
-
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="font-semibold text-green-900 mb-2">Migration Destination:</h4>
-                  <p className="text-sm text-green-800">
-                    Tables will be migrated to: <span className="font-mono bg-white px-2 py-1 rounded">{gristUrl}</span>
-                  </p>
-                </div>
-
-                <Button 
-                  onClick={handleFreeFromAirtable}
-                  disabled={isImporting || selectedTables.length === 0}
-                  className="w-full text-xl py-8 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transition-all"
-                >
-                  {isImporting ? (
-                    "Migrating Data..."
-                  ) : (
-                    <>
-                      <Rocket className="mr-3 h-6 w-6" />
-                      Free from Airtable! 🚀
-                    </>
-                  )}
-                </Button>
               </CardContent>
             </Card>
           )}
@@ -457,12 +455,12 @@ const Index = () => {
                   <h4 className="font-semibold text-green-900 mb-4">Successfully Migrated:</h4>
                   <div className="grid gap-2">
                     {selectedTables.map(tableId => {
-                      const table = mockTables.find(t => t.id === tableId);
+                      const table = airtableTables.find(t => t.id === tableId);
                       return (
                         <div key={tableId} className="flex items-center justify-between bg-white p-3 rounded border">
                           <span className="font-medium">{table?.name}</span>
                           <Badge variant="default">
-                            {table?.recordCount.toLocaleString()} records
+                            Table
                           </Badge>
                         </div>
                       );
