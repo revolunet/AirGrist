@@ -90,8 +90,8 @@ if __name__ == "__main__":
     _SAMPLE_TABLE_1_SCHEMA = TableInGristApi(
         id="Participants",
         columns=[
-            ColumnInGristApi(id="nom", fields=FieldInGristApi(label="nom", type=FieldInGristApiTypeEnum.TEXT)),
-            ColumnInGristApi(id="age", fields=FieldInGristApi(label="age", type=FieldInGristApiTypeEnum.INT)),
+            ColumnInGristApi(id="nom", fields=FieldInGristApi(label="Nom", type=FieldInGristApiTypeEnum.TEXT)),
+            ColumnInGristApi(id="age", fields=FieldInGristApi(label="Âge", type=FieldInGristApiTypeEnum.INT)),
         ]
     )
     _SAMPLE_TABLE_1_RECORDS = [
@@ -103,6 +103,21 @@ if __name__ == "__main__":
         {"nom": "Alban", "age": 28},
     ]
 
+    _SAMPLE_TABLE_2_SCHEMA = TableInGristApi(
+        id="Catalog",
+        columns=[
+            ColumnInGristApi(id="product", fields=FieldInGristApi(label="Product", type=FieldInGristApiTypeEnum.TEXT)),
+            ColumnInGristApi(id="price", fields=FieldInGristApi(label="Price in Euros", type=FieldInGristApiTypeEnum.NUMERIC)),
+        ]
+    )
+    _SAMPLE_TABLE_2_RECORDS = [
+        {"product": "tomato", "price": 2.1},
+        {"product": "apple", "price": 3.1},
+        {"product": "orange", "price": 0.5},
+        {"product": "watermelon", "price": 2.6},
+        {"product": "onion", "price": 2.2},
+    ]
+
     grist_client = GristApiClient(api_url=GRIST_API_URL, api_key=GRIST_API_KEY)
 
     # Create the document
@@ -110,10 +125,19 @@ if __name__ == "__main__":
     print(f"Created document with ID {repr(doc_id)}")
 
     # Add the tables we'd like to import to it
-    all_table_ids = grist_client.add_tables_to_document(document_id=doc_id, list_of_tables=[_SAMPLE_TABLE_1_SCHEMA])
-    print(f"Created tables with ID {repr(all_table_ids)}")
-    table1_grist_id = all_table_ids[0]  # We know we only created 1 table in this sample script
+    all_table_ids = grist_client.add_tables_to_document(
+        document_id=doc_id, 
+        list_of_tables=[_SAMPLE_TABLE_1_SCHEMA, _SAMPLE_TABLE_2_SCHEMA],
+    )
+    print(f"Created tables with IDs {repr(all_table_ids)}")
+    table1_grist_id = all_table_ids[0]
+    table2_grist_id = all_table_ids[1]
 
     # Add the records to each table we're importing
-    grist_client.add_records_to_table(document_id=doc_id, table_id=table1_grist_id, records_to_add=_SAMPLE_TABLE_1_RECORDS)
-    print(f"Done adding {len(_SAMPLE_TABLE_1_RECORDS)} records to table with ID {table1_grist_id}")
+    for [table_id, records_to_add] in [
+        [table1_grist_id, _SAMPLE_TABLE_1_RECORDS],
+        [table2_grist_id, _SAMPLE_TABLE_2_RECORDS],
+    ]:
+        grist_client.add_records_to_table(document_id=doc_id, table_id=table_id, records_to_add=records_to_add)
+        print(f"Done adding {len(records_to_add)} records to table with ID {table_id}")
+    print("All done!")
